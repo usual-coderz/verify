@@ -1,6 +1,15 @@
 import { MongoClient } from "mongodb";
 
 const client = new MongoClient(process.env.MONGO_URI);
+let db;
+
+async function getDB() {
+    if (!db) {
+        await client.connect();
+        db = client.db("starbot");
+    }
+    return db;
+}
 
 export default async function handler(req, res) {
     try {
@@ -14,13 +23,13 @@ export default async function handler(req, res) {
             return res.json({ status: "error" });
         }
 
-        await client.connect();
-        const db = client.db("starbot");
-        const users = db.collection("users");
+        const database = await getDB();
+        const users = database.collection("users");
 
         const ip =
             req.headers["x-forwarded-for"]?.split(",")[0] ||
-            req.socket.remoteAddress;
+            req.socket.remoteAddress ||
+            "unknown";
 
         const deviceUser = await users.findOne({ device_id });
         if (deviceUser && deviceUser.user_id !== user_id) {
@@ -33,6 +42,7 @@ export default async function handler(req, res) {
         }
 
         const existing = await users.findOne({ user_id });
+
         if (existing && existing.verified) {
             return res.json({ status: "already" });
         }
@@ -53,6 +63,7 @@ export default async function handler(req, res) {
         return res.json({ status: "ok" });
 
     } catch (err) {
+        console.error(err);
         return res.json({ status: "error" });
     }
 }
