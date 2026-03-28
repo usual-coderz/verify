@@ -1,94 +1,69 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Verification</title>
+import { MongoClient } from "mongodb";
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://openfpcdn.io/fingerprintjs/v3"></script>
+const client = new MongoClient(process.env.MONGO_URI);
+let db;
 
-  <style>
-    body {
-      font-family: Arial;
-      text-align: center;
-      padding-top: 60px;
-      background: #0f172a;
-      color: white;
+async function getDB() {
+    if (!db) {
+        await client.connect();
+        db = client.db("starbot");
     }
+    return db;
+}
 
-    .box {
-      background: #1e293b;
-      padding: 30px;
-      border-radius: 15px;
-      display: inline-block;
-    }
+export default async function handler(req, res) {
+    try {
+        if (req.method !== "POST") {
+            return res.status(405).json({ error: "Method not allowed" });
+        }
 
-    button {
-      margin-top: 20px;
-      padding: 15px 30px;
-      font-size: 18px;
-      border-radius: 10px;
-      border: none;
-      background: #22c55e;
-      color: white;
-      cursor: pointer;
-    }
+        const { user_id, device_id } = req.body;
 
-    button:hover {
-      background: #16a34a;
-    }
-  </style>
-</head>
-<body>
+        if (!user_id || !device_id) {
+            return res.json({ status: "error" });
+        }
 
-<div class="box">
-  <h2>🤖 Human Verification</h2>
-  <p>Click below to confirm you are not a robot</p>
+        const database = await getDB();
+        const users = database.collection("users");
 
-  <button onclick="verify()">✅ I am not a robot</button>
-</div>
+        const ip =
+            req.headers["x-forwarded-for"]?.split(",")[0] ||
+            req.socket.remoteAddress ||
+            "unknown";
 
-<script>
-async function verify() {
-    const tg = window.Telegram.WebApp;
-    tg.expand();
+        const deviceUser = await users.findOne({ device_id });
+        if (deviceUser && deviceUser.user_id !== user_id) {
+            return res.json({ status: "blocked_device" });
+        }
 
-    const fp = await FingerprintJS.load();
-    const result = await fp.get();
+        const ipCount = await users.countDocuments({ ip });
+        if (ipCount >= 3) {
+            return res.json({ status: "blocked_ip" });
+        }
 
-    const device_id = result.visitorId;
-    const user = tg.initDataUnsafe.user;
+        const existing = await users.findOne({ user_id });
 
-    if (!user) {
-        alert("Telegram data not found!");
-        return;
-    }
+        if (existing && existing.verified) {
+            return res.json({ status: "already" });
+        }
 
-    const res = await fetch("/api/verify", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            user_id: user.id,
-            device_id: device_id
-        })
-    });
+        await users.updateOne(
+            { user_id },
+            {
+                $set: {
+                    device_id,
+                    ip,
+                    verified: true,
+                    verified_at: new Date()
+                }
+            },
+            { upsert: true }
+        );
 
-    const data = await res.json();
+        return res.json({ status: "ok" });
 
-    if (data.status === "ok") {
-        tg.sendData("verified");
-    } else if (data.status === "blocked_device") {
-        alert("❌ Device already used!");
-    } else if (data.status === "blocked_ip") {
-        alert("❌ Too many accounts on this network!");
-    } else if (data.status === "already") {
-        tg.sendData("verified");
-    } else {
-        alert("❌ Verification failed!");
+    } catch (err) {
+        console.error(err);
+        return res.json({ status: "error" });
     }
 }
-</script>
-
-</body>
-</html>
