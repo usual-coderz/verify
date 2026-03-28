@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Verification</title>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://openfpcdn.io/fingerprintjs/v3"></script>
+
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      padding-top: 60px;
+      background: #0f172a;
+      color: white;
+    }
+
+    .box {
+      background: #1e293b;
+      padding: 30px;
+      border-radius: 15px;
+      display: inline-block;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 15px 30px;
+      font-size: 18px;
+      border-radius: 10px;
+      border: none;
+      background: #22c55e;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #16a34a;
+    }
+  </style>
+</head>
+<body>
+
+<div class="box">
+  <h2>🤖 Human Verification</h2>
+  <p>Click below to confirm you are not a robot</p>
+
+  <button onclick="verify()">✅ I am not a robot</button>
+</div>
+
+<script>
+async function verify() {
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    const fp = await FingerprintJS.load();
+    const result = await fp.get();
+
+    const device_id = result.visitorId;
+    const user = tg.initDataUnsafe.user;
+
+    if (!user) {
+        alert("Telegram data not found!");
+        return;
+    }
+
+    const res = await fetch("/api/verify", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            user_id: user.id,
+            device_id: device_id
+        })
+    });
+
+    const data = await res.json();
+
+    if (data.status === "ok") {
+        tg.sendData("verified");
+    } else if (data.status === "blocked_device") {
+        alert("❌ Device already used!");
+    } else if (data.status === "blocked_ip") {
+        alert("❌ Too many accounts on this network!");
+    } else if (data.status === "already") {
+        tg.sendData("verified");
+    } else {
+        alert("❌ Verification failed!");
+    }
+}
+</script>
+
+</body>
+</html>
