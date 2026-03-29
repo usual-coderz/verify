@@ -15,6 +15,7 @@
       height: 100vh;
       font-family: Arial;
       color: white;
+      margin: 0;
     }
 
     .captcha-box {
@@ -26,7 +27,12 @@
       align-items: center;
       width: 300px;
       cursor: pointer;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      box-shadow: 0 0 15px rgba(0,0,0,0.4);
+      transition: 0.2s;
+    }
+
+    .captcha-box:hover {
+      transform: scale(1.02);
     }
 
     .checkbox {
@@ -37,6 +43,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      font-size: 16px;
     }
 
     .checked {
@@ -50,14 +57,39 @@
       font-size: 12px;
       color: #555;
     }
+
+    .done {
+      display: none;
+      text-align: center;
+    }
+
+    .done button {
+      margin-top: 15px;
+      padding: 12px 25px;
+      background: #22c55e;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .done button:hover {
+      background: #16a34a;
+    }
   </style>
 </head>
 <body>
 
-<div class="captcha-box" onclick="verify()" id="box">
+<div id="box" class="captcha-box" onclick="verify()">
   <div class="checkbox" id="check"></div>
   <div>I'm not a robot</div>
   <div class="right">reCAPTCHA</div>
+</div>
+
+<div id="done" class="done">
+  <h3>✅ Verification Successful</h3>
+  <button onclick="goBot()">🚀 Continue to Bot</button>
 </div>
 
 <script>
@@ -79,34 +111,45 @@ async function verify() {
 
     const fp = await FingerprintJS.load();
     const result = await fp.get();
-
     const device_id = result.visitorId;
 
-    const res = await fetch("/api/server", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            user_id: user.id,
-            device_id: device_id
-        })
-    });
+    try {
+        const res = await fetch("/api/server", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                user_id: user.id,
+                device_id: device_id
+            })
+        });
 
-    const data = await res.json();
+        const data = await res.json();
 
-    if (data.status === "ok" || data.status === "already") {
-        setTimeout(() => {
+        if (data.status === "ok" || data.status === "already") {
             tg.sendData("verified");
-            tg.close();
-        }, 800);
-    } else if (data.status === "blocked_device") {
-        alert("❌ Device already used!");
-    } else if (data.status === "blocked_ip") {
-        alert("❌ Too many accounts!");
-    } else {
-        alert("❌ Verification failed!");
+
+            setTimeout(() => {
+                document.getElementById("box").style.display = "none";
+                document.getElementById("done").style.display = "block";
+            }, 800);
+
+        } else if (data.status === "blocked_device") {
+            alert("❌ Device already used!");
+        } else if (data.status === "blocked_ip") {
+            alert("❌ Too many accounts!");
+        } else {
+            alert("❌ Verification failed!");
+        }
+
+    } catch (e) {
+        alert("❌ Server error!");
     }
+}
+
+function goBot() {
+    window.location.href = "https://t.me/Tikustarbot?start=verified";
 }
 </script>
 
