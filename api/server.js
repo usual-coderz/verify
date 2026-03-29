@@ -1,51 +1,57 @@
 import { MongoClient } from "mongodb";
 
-let client;
-let db;
+let cachedClient = null;
+let cachedDb = null;
 
 async function connectDB() {
-    if (!client) {
-        client = new MongoClient(process.env.MONGO_URI, {
-            maxPoolSize: 10
+    if (cachedDb) return cachedDb;
+
+    if (!cachedClient) {
+        cachedClient = new MongoClient(process.env.MONGO_URI, {
+            maxPoolSize: 10,
+            serverSelectionTimeoutMS: 5000
         });
-        await client.connect();
-        db = client.db("starbot");
+        await cachedClient.connect();
     }
-    return db;
+
+    cachedDb = cachedClient.db("starbot");
+    return cachedDb;
 }
 
 export default async function handler(req, res) {
-    try {
-        if (req.method !== "POST") {
-            return res.status(405).json({ status: "error" });
-        }
+    if (req.method !== "POST") {
+        return res.status(405).json({ status: "error" });
+    }
 
+    try {
         const { user_id, device_id } = req.body;
 
         if (!user_id || !device_id) {
             return res.json({ status: "error" });
         }
 
-        const database = await connectDB();
-        const users = database.collection("users");
+        const db = await connectDB();
+        const users = db.collection("users");
 
         const ip =
-            req.headers["x-forwarded-for"]?.split(",")[0] ||
-            req.socket.remoteAddress ||
+            req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+            req.socket?.remoteAddress ||
             "unknown";
 
-        const existingUser = await users.findOne({ user_id });
+        const existing = await users.findOne({ user_id });
 
-        if (existingUser && existingUser.verified) {
+        if (existing?.verified) {
             return res.json({ status: "already" });
         }
 
-        const deviceCheck = await users.findOne({ device_id });
-        if (deviceCheck && deviceCheck.user_id !== user_id) {
+        const deviceUsed = await users.findOne({ device_id });
+
+        if (deviceUsed && deviceUsed.user_id !== user_id) {
             return res.json({ status: "blocked_device" });
         }
 
         const ipCount = await users.countDocuments({ ip });
+
         if (ipCount >= 3) {
             return res.json({ status: "blocked_ip" });
         }
@@ -67,7 +73,7 @@ export default async function handler(req, res) {
         return res.json({ status: "ok" });
 
     } catch (err) {
-        console.error("ERROR:", err);
+        console.error("❌ API ERROR:", err);
         return res.json({ status: "error" });
     }
 }
