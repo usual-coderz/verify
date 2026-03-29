@@ -8,60 +8,79 @@
 
   <style>
     body {
-      font-family: Arial;
-      text-align: center;
-      padding-top: 60px;
       background: #0f172a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: Arial;
       color: white;
     }
 
-    .box {
-      background: #1e293b;
-      padding: 30px;
-      border-radius: 15px;
-      display: inline-block;
+    .captcha-box {
+      background: white;
+      color: black;
+      padding: 15px 20px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      width: 300px;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
     }
 
-    button {
-      margin-top: 20px;
-      padding: 15px 30px;
-      font-size: 18px;
-      border-radius: 10px;
-      border: none;
+    .checkbox {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #555;
+      margin-right: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .checked {
       background: #22c55e;
       color: white;
-      cursor: pointer;
+      font-weight: bold;
     }
 
-    button:hover {
-      background: #16a34a;
+    .right {
+      margin-left: auto;
+      font-size: 12px;
+      color: #555;
     }
   </style>
 </head>
 <body>
 
-<div class="box">
-  <h2>🤖 Human Verification</h2>
-  <p>Click below to confirm you are not a robot</p>
-
-  <button onclick="verify()">✅ I am not a robot</button>
+<div class="captcha-box" onclick="verify()" id="box">
+  <div class="checkbox" id="check"></div>
+  <div>I'm not a robot</div>
+  <div class="right">reCAPTCHA</div>
 </div>
 
 <script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
 async function verify() {
-    const tg = window.Telegram.WebApp;
-    tg.expand();
+    const user = tg.initDataUnsafe.user;
+
+    if (!user) {
+        alert("Open inside Telegram!");
+        return;
+    }
+
+    const check = document.getElementById("check");
+    check.classList.add("checked");
+    check.innerHTML = "✔";
 
     const fp = await FingerprintJS.load();
     const result = await fp.get();
 
     const device_id = result.visitorId;
-    const user = tg.initDataUnsafe.user;
-
-    if (!user) {
-        alert("Telegram data not found!");
-        return;
-    }
 
     const res = await fetch("/api/server", {
         method: "POST",
@@ -76,14 +95,15 @@ async function verify() {
 
     const data = await res.json();
 
-    if (data.status === "ok") {
-        tg.sendData("verified");
+    if (data.status === "ok" || data.status === "already") {
+        setTimeout(() => {
+            tg.sendData("verified");
+            tg.close();
+        }, 800);
     } else if (data.status === "blocked_device") {
         alert("❌ Device already used!");
     } else if (data.status === "blocked_ip") {
-        alert("❌ Too many accounts on this network!");
-    } else if (data.status === "already") {
-        tg.sendData("verified");
+        alert("❌ Too many accounts!");
     } else {
         alert("❌ Verification failed!");
     }
