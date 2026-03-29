@@ -1,10 +1,13 @@
 import { MongoClient } from "mongodb";
 
-const client = new MongoClient(process.env.MONGO_URI);
+let client;
 let db;
 
-async function getDB() {
-    if (!db) {
+async function connectDB() {
+    if (!client) {
+        client = new MongoClient(process.env.MONGO_URI, {
+            maxPoolSize: 10
+        });
         await client.connect();
         db = client.db("starbot");
     }
@@ -14,7 +17,7 @@ async function getDB() {
 export default async function handler(req, res) {
     try {
         if (req.method !== "POST") {
-            return res.status(405).json({ error: "Method not allowed" });
+            return res.status(405).json({ status: "error" });
         }
 
         const { user_id, device_id } = req.body;
@@ -23,7 +26,7 @@ export default async function handler(req, res) {
             return res.json({ status: "error" });
         }
 
-        const database = await getDB();
+        const database = await connectDB();
         const users = database.collection("users");
 
         const ip =
@@ -31,8 +34,14 @@ export default async function handler(req, res) {
             req.socket.remoteAddress ||
             "unknown";
 
-        const deviceUser = await users.findOne({ device_id });
-        if (deviceUser && deviceUser.user_id !== user_id) {
+        const existingUser = await users.findOne({ user_id });
+
+        if (existingUser && existingUser.verified) {
+            return res.json({ status: "already" });
+        }
+
+        const deviceCheck = await users.findOne({ device_id });
+        if (deviceCheck && deviceCheck.user_id !== user_id) {
             return res.json({ status: "blocked_device" });
         }
 
@@ -41,16 +50,11 @@ export default async function handler(req, res) {
             return res.json({ status: "blocked_ip" });
         }
 
-        const existing = await users.findOne({ user_id });
-
-        if (existing && existing.verified) {
-            return res.json({ status: "already" });
-        }
-
         await users.updateOne(
             { user_id },
             {
                 $set: {
+                    user_id,
                     device_id,
                     ip,
                     verified: true,
@@ -63,7 +67,7 @@ export default async function handler(req, res) {
         return res.json({ status: "ok" });
 
     } catch (err) {
-        console.error(err);
+        console.error("ERROR:", err);
         return res.json({ status: "error" });
     }
 }
