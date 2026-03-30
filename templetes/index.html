@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Verification</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #f1f3f4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.box {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    width: 350px;
+    text-align: center;
+}
+
+button {
+    padding: 10px 20px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+    <h2>🔐 Human Verification</h2>
+
+    <button onclick="verify()">I'm not a robot</button>
+
+    <br>
+
+    <button onclick="back()">⬅ Back to Bot</button>
+</div>
+
+<script>
+function verify() {
+    const params = new URLSearchParams(window.location.search);
+    const user_id = params.get("user_id");
+    const token = params.get("token");
+
+    fetch(`/verify?user_id=${user_id}&token=${token}`)
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "verified") {
+            window.location.href = `https://t.me/{{ bot }}?start=${user_id}`;
+        } else {
+            alert(data.status);
+        }
+    });
+}
+
+function back() {
+    const params = new URLSearchParams(window.location.search);
+    const user_id = params.get("user_id");
+
+    window.location.href = `https://t.me/{{ bot }}?start=${user_id}`;
+}
+</script>
+
+</body>
+</html>
