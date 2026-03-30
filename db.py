@@ -1,6 +1,7 @@
 from pymongo import MongoClient
+import os
 
-MONGO_URL = "YOUR_MONGO_URL"
+MONGO_URL = os.getenv("MONGO_URL") or "YOUR_MONGO_URL"
 
 client = MongoClient(
     MONGO_URL,
@@ -14,7 +15,10 @@ verified = db["verified"]
 ip_map = db["ip_map"]
 
 
-# ⚡ Create Indexes (IMPORTANT for speed)
+# ⚡ Indexes
 tokens.create_index("user_id")
 verified.create_index("user_id")
 ip_map.create_index("ip")
+
+# 🔥 TTL Index (Auto delete after 5 min)
+tokens.create_index("time", expireAfterSeconds=300)
