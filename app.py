@@ -11,7 +11,7 @@ from security import (
 
 app = Flask(__name__)
 
-BOT_USERNAME = "YourBotUsername"
+BOT_USERNAME = "Tikustarbot"
 
 
 # 🌐 Get real client IP (proxy safe)
